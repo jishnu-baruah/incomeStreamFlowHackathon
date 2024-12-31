@@ -11,6 +11,7 @@ type AuthContextType = {
   error: string | null;
   logIn: () => Promise<void>;
   logOut: () => Promise<void>;
+  clientInitialized: boolean;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -22,6 +23,7 @@ export function AuthContextProvider({
 }) {
   const [mounted, setMounted] = useState(false);
   const [client, setClient] = useState<OKXUniversalConnectUI | null>(null);
+  const [clientInitialized, setClientInitialized] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [chainId, setChainId] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
@@ -33,33 +35,47 @@ export function AuthContextProvider({
   }, []);
 
   useEffect(() => {
-    if (!mounted) return;
+    let isCancelled = false;
 
     const initClient = async () => {
       try {
-        const uiClient = await OKXUniversalConnectUI.init({
-          dappMetaData: {
-            name: 'Flow DApp',
-            icon: 'https://cryptologos.cc/logos/flow-flow-logo.png',
-          },
-          actionsConfiguration: {
-            returnStrategy: 'none',
-            modals: 'all',
-          },
-          uiPreferences: {
-            theme: THEME.LIGHT,
-          },
-        });
-        setClient(uiClient);
+        if (!client && !isCancelled) {
+          const uiClient = await OKXUniversalConnectUI.init({
+            dappMetaData: {
+              name: 'Flow DApp',
+              icon: 'https://cryptologos.cc/logos/flow-flow-logo.png',
+            },
+            actionsConfiguration: {
+              returnStrategy: 'none',
+              modals: 'all',
+            },
+            uiPreferences: {
+              theme: THEME.LIGHT,
+            },
+          });
+          
+          if (!isCancelled) {
+            setClient(uiClient);
+            setClientInitialized(true);
+          }
+        }
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to initialize OKX UI';
-        setError(errorMessage);
-        console.error('Failed to initialize OKX UI:', err);
+        if (!isCancelled) {
+          const errorMessage = err instanceof Error ? err.message : 'Failed to initialize OKX UI';
+          setError(errorMessage);
+          console.error('Failed to initialize OKX UI:', err);
+        }
       }
     };
 
-    void initClient();
-  }, [mounted]);
+    if (mounted && !client && !clientInitialized) {
+      void initClient();
+    }
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [mounted, client, clientInitialized]);
 
   const resetState = () => {
     setWalletAddress(null);
@@ -69,7 +85,7 @@ export function AuthContextProvider({
   };
 
   const logIn = async () => {
-    if (!client) {
+    if (!client || !clientInitialized) {
       setError('OKX client not initialized');
       return;
     }
@@ -116,7 +132,7 @@ export function AuthContextProvider({
   };
 
   const logOut = async () => {
-    if (!client) {
+    if (!client || !clientInitialized) {
       setError('OKX client not initialized');
       return;
     }
@@ -167,6 +183,7 @@ export function AuthContextProvider({
         error,
         logIn,
         logOut,
+        clientInitialized,
       }}
     >
       {children}

@@ -1,20 +1,55 @@
 'use client';
 
 import { useAuth } from '@/context/AuthContext';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 
 export default function WalletConnection() {
-  const { connected, walletAddress, chainId, isLoading, error, logIn, logOut } = useAuth();
+  const { connected, walletAddress, chainId, isLoading, error, logIn, logOut, clientInitialized } = useAuth();
   const [mounted, setMounted] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  const handleConnect = useCallback(async () => {
+    if (isConnecting || !clientInitialized) return;
+    
+    setIsConnecting(true);
+    try {
+      await logIn();
+      localStorage.setItem('walletConnected', 'true');
+    } catch (error) {
+      console.error('Connection error:', error);
+      localStorage.removeItem('walletConnected');
+    } finally {
+      setIsConnecting(false);
+    }
+  }, [logIn, isConnecting, clientInitialized]);
+
+  const handleDisconnect = async () => {
+    try {
+      await logOut();
+      localStorage.removeItem('walletConnected');
+    } catch (error) {
+      console.error('Disconnect error:', error);
+    }
+  };
+
   const truncateAddress = (address: string) => {
     if (!address) return '';
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
+
+  // Check for existing connection
+  useEffect(() => {
+    if (mounted && clientInitialized && !connected && !isLoading && !isConnecting) {
+      const wasConnected = localStorage.getItem('walletConnected') === 'true';
+      if (wasConnected) {
+        handleConnect();
+      }
+    }
+  }, [mounted, clientInitialized, connected, isLoading, isConnecting, handleConnect]);
 
   // Prevent hydration mismatch
   if (!mounted) {
@@ -50,7 +85,7 @@ export default function WalletConnection() {
                 </p>
               )}
               <button
-                onClick={() => void logOut()}
+                onClick={() => void handleDisconnect()}
                 disabled={isLoading}
                 className={`button button-disconnect ${
                   isLoading ? 'opacity-50 cursor-not-allowed' : ''
@@ -65,14 +100,16 @@ export default function WalletConnection() {
           <div>
             <p className="card-subtitle">Connect your wallet with OKX</p>
             <button
-              onClick={() => void logIn()}
-              disabled={isLoading}
+              onClick={() => void handleConnect()}
+              disabled={isLoading || isConnecting || !clientInitialized}
               className={`button button-connect ${
-                isLoading ? 'opacity-50 cursor-not-allowed' : ''
+                (isLoading || isConnecting || !clientInitialized) ? 'opacity-50 cursor-not-allowed' : ''
               }`}
               type="button"
             >
-              {isLoading ? 'Connecting...' : 'Connect OKX Wallet'}
+              {!clientInitialized ? 'Initializing...' : 
+               isLoading || isConnecting ? 'Connecting...' : 
+               'Connect OKX Wallet'}
             </button>
           </div>
         )}
