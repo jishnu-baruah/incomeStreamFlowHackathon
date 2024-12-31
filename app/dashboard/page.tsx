@@ -378,10 +378,10 @@ const fetchData = useCallback(async () => {
         onClick={async () => {
           try {
             setLoading(true);
-            await web3Service.deposit('1');
+            await web3Service.deposit('100');
             toast({
               title: 'Success',
-              description: 'Successfully deposited 1 FLOW',
+              description: 'Successfully deposited 100 FLOW',
             });
             await fetchData();
           } catch (error) {
@@ -401,7 +401,7 @@ const fetchData = useCallback(async () => {
         {loading ? (
           <Loader2 className="h-4 w-4 animate-spin" />
         ) : (
-          'Deposit 1 FLOW'
+          'Deposit 100 FLOW'
         )}
       </Button>
       <Button
