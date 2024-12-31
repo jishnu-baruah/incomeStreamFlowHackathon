@@ -5,7 +5,7 @@ export const FLOW_TESTNET = {
     name: 'EVM on Flow Testnet'
 };
 
-export const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || '';
+export const CONTRACT_ADDRESS = "0x987D3F56CC09E90e846b5657be5923E48a6500a0";
 export const CONTRACT_ABI = [
 	{
 		"inputs": [
