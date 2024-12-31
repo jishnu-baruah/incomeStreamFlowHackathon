@@ -2,118 +2,13 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { OKXUniversalConnectUI, THEME, WalletSession } from '@okxconnect/ui';
-import { Contract, BrowserProvider, parseEther, formatEther } from 'ethers';
-import { CONTRACT_ADDRESS, CONTRACT_ABI } from '@/config/contractConfig';
-import { Web3Service } from '@/types/web3';
+import {web3Service} from '../services/web3Service';
 
 declare global {
 	interface Window {
 	  okxwallet?: any;
 	}
   }
-
-// Web3Service Implementation
-class Web3ServiceImplementation implements Web3Service {
-  private provider: BrowserProvider | null = null;
-  private contract: Contract | null = null;
-
-  async initialize(provider: any) {
-    try {
-        // Request network switch to Flow testnet
-        await provider.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: '0x221' }], // 545 in hex
-        });
-    } catch (error: any) {
-        if (error.code === 4902) {
-            // If network doesn't exist, add it
-            await provider.request({
-                method: 'wallet_addEthereumChain',
-                params: [{
-                    chainId: '0x221', // 545 in hex
-                    chainName: 'EVM on Flow Testnet',
-                    nativeCurrency: {
-                        name: 'FLOW',
-                        symbol: 'FLOW',
-                        decimals: 18
-                    },
-                    rpcUrls: ['https://testnet.evm.nodes.onflow.org'],
-                    blockExplorerUrls: ['https://evm-testnet.flowscan.io']
-                }]
-            });
-        }
-    }
-
-    this.provider = new BrowserProvider(provider);
-    const signer = await this.provider.getSigner();
-    this.contract = new Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
-  }
-
-  async createPaymentSchedule(
-    recipient: string,
-    amount: string,
-    frequency: number,
-    nextPaymentDate: number,
-    conditionType: number,
-    conditionValue: string,
-    paymentType: string
-  ) {
-    if (!this.contract) throw new Error('Contract not initialized');
-    const tx = await this.contract.createPaymentSchedule(
-      recipient,
-      parseEther(amount),
-      frequency,
-      nextPaymentDate,
-      conditionType,
-      parseEther(conditionValue),
-      paymentType
-    );
-    await tx.wait();
-  }
-
-  async payNow(recipient: string, amount: string, paymentType: string) {
-    if (!this.contract) throw new Error('Contract not initialized');
-    const tx = await this.contract.payNow(
-      recipient,
-      parseEther(amount),
-      paymentType
-    );
-    await tx.wait();
-  }
-
-  async getUserBalance() {
-    if (!this.contract) throw new Error('Contract not initialized');
-    const balance = await this.contract.getUserBalance();
-    return formatEther(balance);
-  }
-
-  async getPaymentSchedules() {
-    if (!this.contract) throw new Error('Contract not initialized');
-    return await this.contract.getUserPaymentSchedules();
-  }
-
-  async executePayment(index: number) {
-    if (!this.contract) throw new Error('Contract not initialized');
-    const tx = await this.contract.executePayment(index);
-    await tx.wait();
-  }
-
-  async deposit(amount: string) {
-    if (!this.contract) throw new Error('Contract not initialized');
-    const tx = await this.contract.deposit({
-      value: parseEther(amount)
-    });
-    await tx.wait();
-  }
-
-  async withdraw(amount: string) {
-    if (!this.contract) throw new Error('Contract not initialized');
-    const tx = await this.contract.withdraw(parseEther(amount));
-    await tx.wait();
-  }
-}
-
-const web3Service = new Web3ServiceImplementation();
 
 type AuthContextType = {
   connected: boolean;
@@ -124,7 +19,7 @@ type AuthContextType = {
   logIn: () => Promise<void>;
   logOut: () => Promise<void>;
   clientInitialized: boolean;
-  web3Service: Web3Service;
+  web3Service: typeof web3Service;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -155,7 +50,7 @@ export function AuthContextProvider({
         if (!client && !isCancelled) {
           const uiClient = await OKXUniversalConnectUI.init({
             dappMetaData: {
-              name: 'Flow DApp',
+              name: 'IncomeStream',
               icon: 'https://cryptologos.cc/logos/flow-flow-logo.png',
             },
             actionsConfiguration: {
@@ -163,7 +58,7 @@ export function AuthContextProvider({
               modals: 'all',
             },
             uiPreferences: {
-              theme: THEME.LIGHT,
+              theme: THEME.DARK,
             },
           });
           
@@ -225,15 +120,18 @@ export function AuthContextProvider({
         throw new Error('Invalid session response');
       }
 
+      // Initialize web3 service with provider
+      if (window.okxwallet) {
+        await web3Service.initialize(window.okxwallet, 'web');
+      }
+
       const address = session.namespaces.eip155.accounts[0].split(':')[2];
       const chain = session.namespaces.eip155.chains[0]?.split(':')[1] ?? null;
 
-      // Initialize web3 service with provider
-      if (window.okxwallet) {
-        await web3Service.initialize(window.okxwallet);
-      }
-
-      setWalletAddress(address);
+      // Verify wallet address
+      const confirmedAddress = await web3Service.getWalletAddress();
+      
+      setWalletAddress(confirmedAddress || address);
       setChainId(chain);
       setConnected(true);
     } catch (err) {
