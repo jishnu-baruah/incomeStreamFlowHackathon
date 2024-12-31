@@ -9,31 +9,26 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Add client-side only rendering
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Custom body component to handle dynamic attributes
-  const Body = ({ children }: { children: React.ReactNode }) => {
-    if (!mounted) {
-      return null;
-    }
-
-    return (
-      <body suppressHydrationWarning>
-        {children}
-      </body>
-    );
-  };
+  if (!mounted) {
+    return null;
+  }
 
   return (
     <html lang="en">
-      <Body>
-        <AuthContextProvider>{children}</AuthContextProvider>
-      </Body>
+      <body suppressHydrationWarning className="min-h-screen flex flex-col">
+        <AuthContextProvider>
+          <main className="flex-grow overflow-y-auto">
+            {children}
+          </main>
+        </AuthContextProvider>
+      </body>
     </html>
   );
 }
+
